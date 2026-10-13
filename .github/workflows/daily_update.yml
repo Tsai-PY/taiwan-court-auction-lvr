@@ -1,0 +1,58 @@
+name: 每日自動更新法拍與實價登錄
+
+on:
+  schedule:
+    # 每天台灣時間早上 08:30 (UTC 00:30) 自動執行
+    - cron: '30 0 * * *'
+  workflow_dispatch: # 支援在 GitHub 網頁上手動點擊「Run workflow」按鍵立即更新
+
+# 允許 Actions 推送更新到 GitHub Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 簽出專案代碼 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安裝相依套件
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 執行法拍屋爬蟲與實價登錄比對
+        run: |
+          python daily_court_lvr_runner.py
+
+      - name: 設定 GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上傳網頁靜態文件 (Upload artifact)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: 部署至 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: 自動保存資料庫快取與歷史結果 (Commit & Push)
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add index.html data/lvr_transactions.db || true
+          git diff --staged --quiet || (git commit -m "chore(bot): 每日自動更新法拍與實價比對資料 [skip ci]" && git push)

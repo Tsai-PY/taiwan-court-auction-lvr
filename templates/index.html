@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司法院法拍屋 × 內政部實價登錄 每日比對系統 (網頁版)</title>
+    <!-- Google Fonts & Tailwind CDN -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        court: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            900: '#7f1d1d',
+                        },
+                        lvr: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .badge-county {
+            background-color: #334155;
+            color: #ffffff;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            font-size: 0.875rem;
+        }
+        .court-badge {
+            background-color: #b91c1c;
+            color: #ffffff;
+        }
+        .lvr-badge {
+            background-color: #0369a1;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-tr from-red-600 to-sky-500 rounded-xl flex items-center justify-center shadow-lg text-xl font-black">
+                    ⚖️
+                </div>
+                <div>
+                    <h1 class="text-lg font-black tracking-tight leading-none text-white">
+                        臺南市 × 高雄市【法拍屋 × 實價登錄】智慧比對平台
+                    </h1>
+                    <p class="text-xs text-slate-400 mt-1">
+                        專屬鎖定臺南地院、高雄地院、橋頭地院 ｜ 內政部實登成交鄰近行情比對
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <button id="btnSync" onclick="triggerSync()" class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-sm font-bold rounded-lg shadow transition duration-150 ease-in-out gap-2">
+                    <svg id="syncIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span id="syncText">立即抓取南高最新法拍</span>
+                </button>
+
+                <a href="/api/export?format=excel" class="inline-flex items-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-lg shadow transition duration-150 ease-in-out gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    匯出 Excel (.xlsx)
+                </a>
+
+                <a href="/api/export?format=csv" class="inline-flex items-center px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-bold rounded-lg shadow transition duration-150 ease-in-out gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    匯出 CSV (.csv)
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主體內容 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- 數據統計看板 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <span class="text-xs font-semibold text-slate-500 uppercase">南高待拍法拍物件數</span>
+                <div class="mt-2 flex items-baseline">
+                    <span id="statCourtCount" class="text-3xl font-black text-slate-900">0</span>
+                    <span class="ml-1 text-sm text-slate-500">筆標的</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <span class="text-xs font-semibold text-slate-500 uppercase">南高實價登錄資料庫</span>
+                <div class="mt-2 flex items-baseline">
+                    <span id="statLvrCount" class="text-3xl font-black text-sky-600">15,606</span>
+                    <span class="ml-1 text-sm text-slate-500">筆成交行情</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <span class="text-xs font-semibold text-slate-500 uppercase">平均法拍折扣率</span>
+                <div class="mt-2 flex items-baseline">
+                    <span id="statAvgDiscount" class="text-3xl font-black text-emerald-600">-</span>
+                    <span class="ml-1 text-sm text-slate-500">相比周邊實登</span>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <span class="text-xs font-semibold text-slate-500 uppercase">資料庫最後同步</span>
+                <div class="mt-2 flex items-baseline">
+                    <span id="statLastUpdate" class="text-sm font-bold text-slate-700 truncate">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速篩選工具列 -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+            <div class="flex-1 min-w-[280px]">
+                <div class="relative">
+                    <input type="text" id="filterKeyword" oninput="applyFilters()" placeholder="搜尋住址、路名、行政區、社區或案號..." 
+                           class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition">
+                    <svg class="w-5 h-5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <select id="filterCounty" onchange="applyFilters()" class="py-2.5 px-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+                    <option value="">全部縣市</option>
+                </select>
+
+                <select id="filterRound" onchange="applyFilters()" class="py-2.5 px-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+                    <option value="">全部拍次</option>
+                    <option value="第1拍">第 1 拍</option>
+                    <option value="第2拍">第 2 拍</option>
+                    <option value="第3拍">第 3 拍</option>
+                    <option value="第4拍">第 4 拍</option>
+                </select>
+
+                <select id="filterCheck" onchange="applyFilters()" class="py-2.5 px-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+                    <option value="">點交情形 (不限)</option>
+                    <option value="點交">點交</option>
+                    <option value="不點交">不點交</option>
+                </select>
+
+                <button onclick="resetFilters()" class="py-2.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition">
+                    重設篩選
+                </button>
+            </div>
+        </div>
+
+        <!-- 雙欄相鄰核心比對區 -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <!-- 欄位標題 (左右相鄰兩欄) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 border-b-2 border-slate-200 text-sm font-black tracking-wide">
+                <div class="bg-red-50 text-red-900 p-4 flex items-center justify-between border-b lg:border-b-0 lg:border-r border-slate-200">
+                    <div class="flex items-center space-x-2">
+                        <span class="p-1.5 bg-red-600 text-white rounded-lg text-xs">🏛️ 第一欄</span>
+                        <span class="text-base font-extrabold">司法院法拍屋資訊</span>
+                        <span class="text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                            (縣市 ➔ 住址 ➔ 法拍底價)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-sky-50 text-sky-900 p-4 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <span class="p-1.5 bg-sky-600 text-white rounded-lg text-xs">🏡 第二欄</span>
+                        <span class="text-base font-extrabold">鄰近實價登錄成交資訊</span>
+                        <span class="text-xs font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded">
+                            (縣市 ➔ 鄰近住址 ➔ 實登成交價)
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 比對列表清單 -->
+            <div id="recordsContainer" class="divide-y divide-slate-200">
+                <!-- 動態注入內容 -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="max-w-7xl mx-auto px-4 py-8 text-center text-xs text-slate-500">
+        資料來源：中華民國司法院拍賣公告查詢系統 ＆ 內政部不動產成交案件實際資訊資料供應系統 ｜ 系統採每日定時同步更新
+    </footer>
+
+    <!-- 前端互動邏輯 -->
+    <script>
+        let allRecords = [];
+
+        // 頁面載入時請求後端 API
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchRecords();
+        });
+
+        // 取得資料
+        async function fetchRecords() {
+            try {
+                const res = await fetch('/api/records');
+                const data = await res.json();
+                allRecords = data.records || [];
+
+                // 更新統計
+                document.getElementById('statCourtCount').innerText = allRecords.length;
+                document.getElementById('statLastUpdate').innerText = data.last_update || '剛剛';
+
+                // 計算平均折數
+                let totalDiscount = 0, countDiscount = 0;
+                allRecords.forEach(r => {
+                    if (r.court_price && r.lvr_price && r.lvr_price > 0) {
+                        totalDiscount += (r.court_price / r.lvr_price) * 10;
+                        countDiscount++;
+                    }
+                });
+                if (countDiscount > 0) {
+                    const avg = (totalDiscount / countDiscount).toFixed(1);
+                    document.getElementById('statAvgDiscount').innerText = avg + ' 折';
+                }
+
+                // 填入縣市選項 (臺南市與高雄市)
+                const countySelect = document.getElementById('filterCounty');
+                const counties = [...new Set(allRecords.map(r => r.court_county).filter(Boolean))];
+                countySelect.innerHTML = '<option value="">全部直轄市 (臺南+高雄)</option>';
+                counties.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.innerText = c;
+                    countySelect.appendChild(opt);
+                });
+
+                applyFilters();
+            } catch (err) {
+                console.error("載入資料失敗:", err);
+            }
+        }
+
+        // 觸發重新抓取與同步
+        async function triggerSync() {
+            const btn = document.getElementById('btnSync');
+            const syncIcon = document.getElementById('syncIcon');
+            const syncText = document.getElementById('syncText');
+
+            btn.disabled = true;
+            syncIcon.classList.add('animate-spin');
+            syncText.innerText = '正在連線司法院抓取中...';
+
+            try {
+                const res = await fetch('/api/sync', { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    await fetchRecords();
+                    alert(`✅ 抓取與比對完成！成功擷取 ${result.count} 筆法拍物件並完成實價登錄對照。`);
+                } else {
+                    alert(`⚠️ 同步提醒：${result.message || '連線逾時'}`);
+                }
+            } catch (err) {
+                alert(`抓取失敗：${err.message}`);
+            } finally {
+                btn.disabled = false;
+                syncIcon.classList.remove('animate-spin');
+                syncText.innerText = '立即抓取今日最新法拍';
+            }
+        }
+
+        // 篩選與渲染
+        function applyFilters() {
+            const kw = document.getElementById('filterKeyword').value.trim().toLowerCase();
+            const county = document.getElementById('filterCounty').value;
+            const round = document.getElementById('filterRound').value;
+            const check = document.getElementById('filterCheck').value;
+
+            const filtered = allRecords.filter(r => {
+                if (county && r.court_county !== county) return false;
+                if (round && r.court_round !== round) return false;
+                if (check && !r.court_check.includes(check)) return false;
+                if (kw) {
+                    const text = (r.court_county + r.court_address + r.court_case_no + r.lvr_address).toLowerCase();
+                    if (!text.includes(kw)) return false;
+                }
+                return true;
+            });
+
+            renderRows(filtered);
+        }
+
+        function resetFilters() {
+            document.getElementById('filterKeyword').value = '';
+            document.getElementById('filterCounty').value = '';
+            document.getElementById('filterRound').value = '';
+            document.getElementById('filterCheck').value = '';
+            applyFilters();
+        }
+
+        // 渲染列表 (相鄰兩欄，嚴格按照 縣市 ➔ 住址 ➔ 價格)
+        function renderRows(items) {
+            const container = document.getElementById('recordsContainer');
+            container.innerHTML = '';
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-slate-400">
+                        <p class="text-base font-medium">查無符合條件的法拍與實登物件</p>
+                        <p class="text-xs mt-1">您可以點擊右上角「立即抓取今日最新法拍」更新最新公告。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            items.forEach((r, idx) => {
+                const rowEl = document.createElement('div');
+                rowEl.className = "grid grid-cols-1 lg:grid-cols-2 hover:bg-slate-50 transition duration-150 border-b border-slate-200 last:border-b-0";
+
+                rowEl.innerHTML = `
+                    <!-- 左欄：司法院法拍屋資訊 -->
+                    <div class="p-5 lg:border-r border-slate-200 flex flex-col justify-between space-y-4 bg-white/70">
+                        <div>
+                            <!-- 1. 縣市 & 2. 住址 -->
+                            <div class="flex items-start space-x-2.5">
+                                <span class="badge-county court-badge shrink-0">${r.court_county}</span>
+                                <h3 class="text-base font-bold text-slate-900 leading-snug">
+                                    ${r.court_address}
+                                </h3>
+                            </div>
+
+                            <!-- 3. 法拍價格 -->
+                            <div class="mt-4 bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-red-800">總拍賣底價 (${r.court_round})</span>
+                                    <div class="text-2xl font-black text-red-700 tracking-tight">
+                                        NT$ ${r.court_price_str} 元
+                                    </div>
+                                </div>
+                                <span class="text-xs font-bold px-2.5 py-1 bg-red-200 text-red-900 rounded-md">
+                                    ${r.court_check}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 補充細節 -->
+                        <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+                            <div class="flex items-center space-x-2">
+                                <span>📅 開標日: ${r.court_date}</span>
+                                <span>•</span>
+                                <span>📂 ${r.court_case_no}</span>
+                            </div>
+                            <a href="${r.google_map_url}" target="_blank" class="text-sky-600 hover:text-sky-800 font-bold inline-flex items-center gap-1">
+                                📍 查看地圖 ↗
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- 右欄：鄰近實價登錄成交資訊 -->
+                    <div class="p-5 flex flex-col justify-between space-y-4 bg-slate-50/50">
+                        <div>
+                            <!-- 1. 縣市 & 2. 住址 -->
+                            <div class="flex items-start space-x-2.5">
+                                <span class="badge-county lvr-badge shrink-0">${r.lvr_county}</span>
+                                <h3 class="text-base font-bold text-slate-900 leading-snug">
+                                    ${r.lvr_address}
+                                </h3>
+                            </div>
+
+                            <!-- 3. 實價登錄價格 -->
+                            <div class="mt-4 bg-sky-50 border border-sky-200 rounded-xl p-3.5 flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-semibold text-sky-800">實登成交價 (${r.lvr_deal_date} 成交)</span>
+                                    <div class="text-2xl font-black text-sky-800 tracking-tight">
+                                        NT$ ${r.lvr_price_str} 元
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xs font-medium text-slate-500 block">成交單價</span>
+                                    <span class="text-sm font-bold text-slate-700">${r.lvr_unit_price}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 補充細節 & 價差折數分析 -->
+                        <div class="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between text-xs gap-2">
+                            <div class="text-slate-500 flex items-center space-x-2">
+                                <span>🏠 ${r.lvr_building_type}</span>
+                                <span>•</span>
+                                <span class="text-slate-600">${r.lvr_match_type}</span>
+                            </div>
+                            <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-extrabold rounded-md border border-emerald-300">
+                                💡 ${r.lvr_diff_analysis}
+                            </span>
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(rowEl);
+            });
+        }
+    </script>
+</body>
+</html>
