@@ -4,6 +4,7 @@
 官方網址: https://aomp109.judicial.gov.tw/judbp/wkw/WHD1A02.htm
 """
 
+import os
 import urllib.request
 import urllib.parse
 import http.cookiejar
@@ -278,6 +279,46 @@ class CourtAuctionCrawler:
 
         encoded = urllib.parse.quote(target)
         return f"https://www.google.com/maps/search/?api=1&query={encoded}"
+
+    def download_notice_pdf(self, filenm: str, save_path: str, csrf: str = "", token: str = "") -> bool:
+        """
+        透過 Session 與 VIEW.htm 驗證下載司法院公告 PDF 至本機
+        """
+        if not filenm:
+            return False
+
+        if not csrf or not token:
+            csrf, token = self._get_tokens()
+
+        try:
+            # 1. 呼叫 VIEW.htm 取得存取權限
+            view_url = f"{self.BASE_URL}/wkw/WHD1A02/VIEW.htm"
+            post_headers = dict(self.headers)
+            post_headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+            view_payload = urllib.parse.urlencode({"filenm": filenm, "token": token, "_csrf": csrf}).encode("utf-8")
+            req_v = urllib.request.Request(view_url, data=view_payload, headers=post_headers)
+
+            with self.opener.open(req_v, timeout=self.timeout) as r_v:
+                res_v = json.loads(r_v.read().decode("utf-8", errors="ignore"))
+
+            if res_v.get("status") != "SUCCESS":
+                return False
+
+            # 2. 下載 PDF 內容
+            pdf_url = f"{self.BASE_URL}/wkw/WHD1A02/DO_VIEWPDF.htm?filenm={urllib.parse.quote(filenm)}"
+            req_pdf = urllib.request.Request(pdf_url, headers=self.headers)
+            with self.opener.open(req_pdf, timeout=self.timeout) as r_pdf:
+                content = r_pdf.read()
+
+            if len(content) > 500 and content.startswith(b"%PDF"):
+                os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+                with open(save_path, "wb") as f_out:
+                    f_out.write(content)
+                return True
+        except Exception as e:
+            print(f"[法院爬蟲] 下載公告 PDF 失敗 ({filenm}): {e}")
+
+        return False
 
 
 if __name__ == "__main__":

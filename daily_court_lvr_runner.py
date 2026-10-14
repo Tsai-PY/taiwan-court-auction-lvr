@@ -80,10 +80,13 @@ class DailyCourtLvrRunner:
             print("⚠️ 未取得任何臺南市或高雄市法拍資料，可能是司法院網站維護或連線逾時。")
             return {"count": 0, "csv_path": "", "html_path": ""}
 
-        # 3. 比對各案附近的實價登錄成交行情
-        print(f"\n[步驟 3/3] 正在交叉比對各案鄰近實價登錄行情 (共 {len(court_items)} 筆)...")
+        # 3. 比對各案附近的實價登錄行情與下載公告公文
+        print(f"\n[步驟 3/3] 正在交叉比對各案鄰近實價登錄行情，並同步下載法院公告 PDF (共 {len(court_items)} 筆)...")
         combined_records = []
         last_valid_addr = ""
+        docs_dir = os.path.join(self.base_dir, "docs")
+        os.makedirs(docs_dir, exist_ok=True)
+        csrf, token = self.crawler._get_tokens()
 
         for idx, item in enumerate(court_items, 1):
             lvr_match = self.matcher.find_nearby_transactions(item)
@@ -95,6 +98,20 @@ class DailyCourtLvrRunner:
             else:
                 map_url = self.crawler.make_google_map_url(raw_addr, county, item["town"])
                 last_valid_addr = raw_addr
+
+            # 下載法院公告公文 PDF 至 docs/ 資料夾
+            filenm = item.get("doc_filenm", "")
+            doc_relative_url = ""
+            if filenm:
+                # 建立乾淨的安全檔名，例如 tnd_11508_20163248727.006.pdf
+                safe_name = filenm.strip("/").replace("/", "_")
+                pdf_save_path = os.path.join(docs_dir, safe_name)
+                # 若尚未下載，進行下載
+                if not os.path.exists(pdf_save_path):
+                    self.crawler.download_notice_pdf(filenm, pdf_save_path, csrf=csrf, token=token)
+
+                if os.path.exists(pdf_save_path) and os.path.getsize(pdf_save_path) > 500:
+                    doc_relative_url = f"docs/{safe_name}"
 
             combined = {
                 # --- 【法拍資料區塊】(依序: 縣市 -> 住址 -> 法拍價格) ---
@@ -108,8 +125,8 @@ class DailyCourtLvrRunner:
                 "court_case_no": item["case_no"],
                 "court_court_name": item["court_name"],
                 "court_check": item["check_status"],
-                "doc_filenm": item.get("doc_filenm", ""),
-                "doc_url": item.get("doc_url", ""),
+                "doc_filenm": filenm,
+                "doc_url": doc_relative_url,
                 "google_map_url": map_url,
 
                 # --- 【實價登錄資料區塊】(依序: 縣市 -> 住址 -> 實價登錄價格) ---
@@ -128,14 +145,28 @@ class DailyCourtLvrRunner:
             combined_records.append(combined)
 
             if idx % 10 == 0 or idx == len(court_items):
-                print(f"  -> 已比對 {idx}/{len(court_items)} 筆法拍物件...")
+                print(f"  -> 已比對並處理 {idx}/{len(court_items)} 筆法拍物件...")
 
         # 4. 產出現代化 HTML 雙欄視覺化報告 (內嵌完整比對資料，右上方保留 Excel 與 CSV 隨選下載按鈕)
         html_dated_path = os.path.join(self.output_dir, f"法拍與實價登錄比對儀表板_{today_str}.html")
         html_latest_path = os.path.join(self.output_dir, "法拍與實價登錄比對儀表板_最新.html")
         root_html_path = os.path.join(r"c:\download", "臺南高雄法拍屋與實價登錄比對系統.html")
         index_html_path = os.path.join(self.base_dir, "index.html")
-        
+
+        # 確保 c:\download\docs 也能同步存取 PDF
+        if os.path.exists(r"c:\download") and os.path.abspath(self.base_dir) != os.path.abspath(r"c:\download"):
+            import shutil
+            root_docs = os.path.join(r"c:\download", "docs")
+            os.makedirs(root_docs, exist_ok=True)
+            for f in os.listdir(docs_dir):
+                src = os.path.join(docs_dir, f)
+                dst = os.path.join(root_docs, f)
+                if os.path.isfile(src) and not os.path.exists(dst):
+                    try:
+                        shutil.copy2(src, dst)
+                    except Exception:
+                        pass
+
         target_paths = [html_dated_path, html_latest_path, index_html_path]
         if os.path.exists(r"c:\download"):
             target_paths.append(root_html_path)

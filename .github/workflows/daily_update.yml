@@ -54,5 +54,5 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add index.html data/lvr_transactions.db || true
+          git add index.html docs/ data/lvr_transactions.db || true
           git diff --staged --quiet || (git commit -m "chore(bot): 每日自動更新法拍與實價比對資料 [skip ci]" && git push)
