@@ -249,34 +249,39 @@ class CourtAuctionCrawler:
         }
 
     @staticmethod
-    def make_google_map_url(address: str, county: str = "", town: str = "") -> str:
+    def clean_court_address(address: str, county: str = "", town: str = "") -> str:
+        """清洗法拍地址，去除樓層、室、地下室、附號與備註等，保留純門牌字串"""
+        if not address:
+            return f"{county}{town}"
+
+        target = address.replace("巿", "市").strip()
+        # 清除前綴 (例如: 未辦保存登記建物門牌:、未保存登記建物門牌: 等)
+        target = re.sub(r'^(?:未[辦辦]?保存登記建物)?(?:門牌)?[:：]?', '', target).strip()
+        # 移除括號備註 (例如 (未保存登記部分)、(未辦保存登記建物))
+        target = re.sub(r'[\(（].*?[\)）]', '', target).strip()
+        # 補齊縣市
+        if county:
+            clean_c = county.replace("台", "臺")
+            if not target.startswith("臺南") and not target.startswith("台南") and not target.startswith("高雄"):
+                target = clean_c + target
+
+        # 處理附號: 2號附10 -> 2號
+        target = re.sub(r'([0-9一二三四五六七八九十]+(?:之[0-9]+)?號)附[0-9]+.*$', r'\1', target)
+        # 去除並列多門牌: 577號12樓之1、579號12樓之1 -> 577號
+        target = re.sub(r'([0-9]+號).*?[、,].*$', r'\1', target)
+        target = re.sub(r'([0-9]+(?:、[0-9]+)+號).*$', lambda m: m.group(1).split('、')[0] + '號', target)
+        # 鎖定主門牌號碼，去除後方之樓層、地下室、頂樓、頂層、室、未保存登記等後綴
+        target = re.sub(r'([0-9一二三四五六七八九十]+(?:之[0-9]+)?號)(?:[0-9一二三四五六七八九十]+樓|地下\w*層|頂層|頂樓|\d+F|\d+室|之\d+|未[辦辦]?保存登記.*).*$', r'\1', target)
+        # 去除殘留頓號、逗號或贅詞
+        target = re.sub(r'([0-9]+號).*$', r'\1', target)
+        return target
+
+    @classmethod
+    def make_google_map_url(cls, address: str, county: str = "", town: str = "") -> str:
         """
         清洗法拍地址，去除樓層、室、地下室、附號與備註等，使 Google 地圖能精準掉落大紅圖釘 (Pin Marker)
         """
-        if not address:
-            target = f"{county}{town}"
-        else:
-            target = address.replace("巿", "市").strip()
-            # 清除前綴 (例如: 未辦保存登記建物門牌:、未保存登記建物門牌: 等)
-            target = re.sub(r'^(?:未[辦辦]?保存登記建物)?(?:門牌)?[:：]?', '', target).strip()
-            # 移除括號備註 (例如 (未保存登記部分)、(未辦保存登記建物))
-            target = re.sub(r'[\(（].*?[\)）]', '', target).strip()
-            # 補齊縣市
-            if county:
-                clean_c = county.replace("台", "臺")
-                if not target.startswith("臺南") and not target.startswith("台南") and not target.startswith("高雄"):
-                    target = clean_c + target
-
-            # 處理附號: 2號附10 -> 2號
-            target = re.sub(r'([0-9一二三四五六七八九十]+(?:之[0-9]+)?號)附[0-9]+.*$', r'\1', target)
-            # 去除並列多門牌: 577號12樓之1、579號12樓之1 -> 577號
-            target = re.sub(r'([0-9]+號).*?[、,].*$', r'\1', target)
-            target = re.sub(r'([0-9]+(?:、[0-9]+)+號).*$', lambda m: m.group(1).split('、')[0] + '號', target)
-            # 鎖定主門牌號碼，去除後方之樓層、地下室、頂樓、頂層、室、未保存登記等後綴
-            target = re.sub(r'([0-9一二三四五六七八九十]+(?:之[0-9]+)?號)(?:[0-9一二三四五六七八九十]+樓|地下\w*層|頂層|頂樓|\d+F|\d+室|之\d+|未[辦辦]?保存登記.*).*$', r'\1', target)
-            # 去除殘留頓號、逗號或贅詞
-            target = re.sub(r'([0-9]+號).*$', r'\1', target)
-
+        target = cls.clean_court_address(address, county, town)
         encoded = urllib.parse.quote(target)
         return f"https://www.google.com/maps/search/?api=1&query={encoded}"
 

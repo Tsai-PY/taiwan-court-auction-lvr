@@ -13,6 +13,7 @@ import os
 import sys
 import csv
 import json
+import urllib.parse
 import webbrowser
 from datetime import datetime
 from typing import List, Dict, Any
@@ -113,6 +114,14 @@ class DailyCourtLvrRunner:
                 if os.path.exists(pdf_save_path) and os.path.getsize(pdf_save_path) > 500:
                     doc_relative_url = f"docs/{safe_name}"
 
+            # 同時在 Google 地圖畫面上標示【法拍屋】與【鄰近實價登錄】兩點
+            court_clean_addr = self.crawler.clean_court_address(last_valid_addr if "同上" in raw_addr and last_valid_addr else raw_addr, county, item["town"])
+            lvr_clean_addr = self.matcher.clean_lvr_address(lvr_match["lvr_address"], lvr_match["lvr_county"])
+            if court_clean_addr and lvr_clean_addr:
+                compare_map_url = f"https://www.google.com/maps/dir/?api=1&origin={urllib.parse.quote(court_clean_addr)}&destination={urllib.parse.quote(lvr_clean_addr)}&travelmode=walking"
+            else:
+                compare_map_url = map_url
+
             combined = {
                 # --- 【法拍資料區塊】(依序: 縣市 -> 住址 -> 法拍價格) ---
                 "court_county": item["county"],
@@ -140,7 +149,8 @@ class DailyCourtLvrRunner:
                 "lvr_building_type": lvr_match["lvr_building_type"],
                 "lvr_match_type": lvr_match["match_type"],
                 "lvr_diff_analysis": lvr_match["diff_analysis"],
-                "lvr_map_url": lvr_match.get("lvr_map_url", "")
+                "lvr_map_url": lvr_match.get("lvr_map_url", ""),
+                "compare_map_url": compare_map_url
             }
             combined_records.append(combined)
 
@@ -560,6 +570,26 @@ class DailyCourtLvrRunner:
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
+        .btn-compare {{
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }}
+        .btn-compare:hover {{
+            background: #16a34a;
+            color: white;
+            border-color: #15803d;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
     </style>
 </head>
 <body>
@@ -702,7 +732,10 @@ class DailyCourtLvrRunner:
                             <span class="meta-tag">📅 拍賣日: ${{r.court_date}}</span>
                             <span class="meta-tag">🏷️ ${{r.court_check}}</span>
                             ${{caseNoHtml}}
-                            <a href="${{r.google_map_url}}" target="_blank" class="btn-link" style="margin-left:auto;">📍 查看 Google 地圖</a>
+                            <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                                ${{r.compare_map_url ? `<a href="${{r.compare_map_url}}" target="_blank" class="btn-compare" title="在同一個 Google 地圖畫面同時標示法拍屋與實價登錄位置並規劃步行路線">🗺️ 雙點共同標示 ↗</a>` : ''}}
+                                <a href="${{r.google_map_url}}" target="_blank" class="btn-link" title="僅查看法拍屋單點位置">📍 查看地圖</a>
+                            </div>
                         </div>
                     </td>
 
@@ -721,7 +754,10 @@ class DailyCourtLvrRunner:
                             <span class="meta-tag">🏠 型態: ${{r.lvr_building_type}}</span>
                             <span class="meta-tag">🎯 比對: ${{r.lvr_match_type}}</span>
                             <span class="meta-tag diff-tag">💡 ${{r.lvr_diff_analysis}}</span>
-                            ${{r.lvr_map_url ? `<a href="${{r.lvr_map_url}}" target="_blank" class="btn-link" style="margin-left:auto; color:#0284c7;">📍 查看 Google 地圖</a>` : ''}}
+                            <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                                ${{r.compare_map_url ? `<a href="${{r.compare_map_url}}" target="_blank" class="btn-compare" title="在同一個 Google 地圖畫面同時標示法拍屋與實價登錄位置並規劃步行路線">🗺️ 雙點共同標示 ↗</a>` : ''}}
+                                ${{r.lvr_map_url ? `<a href="${{r.lvr_map_url}}" target="_blank" class="btn-link" style="color:#0284c7;" title="僅查看實價登錄單點位置">📍 查看地圖</a>` : ''}}
+                            </div>
                         </div>
                 `;
                 tbody.appendChild(tr);

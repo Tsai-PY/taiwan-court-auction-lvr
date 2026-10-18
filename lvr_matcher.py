@@ -336,8 +336,8 @@ class LvrMatcher:
             }
 
     @staticmethod
-    def make_lvr_map_url(address: str, county: str = "") -> str:
-        """清洗實價登錄地址並產出 Google Maps 精準定位網址"""
+    def clean_lvr_address(address: str, county: str = "") -> str:
+        """清洗實價登錄地址，去除樓層、地下室等，保留純門牌或地段號字串"""
         if not address or "尚無" in address:
             return ""
 
@@ -377,6 +377,14 @@ class LvrMatcher:
             target = re.sub(r"([0-9一二三四五六七八九十]+(?:之[0-9]+)?號)(?:[0-9一二三四五六七八九十]+樓|地下\w*層|頂層|頂樓|\d+F|\d+室|之\d+).*$", r"\1", target)
             target = re.sub(r"([0-9]+號).*$", r"\1", target)
 
+        return target
+
+    @classmethod
+    def make_lvr_map_url(cls, address: str, county: str = "") -> str:
+        """清洗實價登錄地址並產出 Google Maps 精準定位網址"""
+        target = cls.clean_lvr_address(address, county)
+        if not target:
+            return ""
         encoded = urllib.parse.quote(target)
         return f"https://www.google.com/maps/search/?api=1&query={encoded}"
 
