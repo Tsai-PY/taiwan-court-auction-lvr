@@ -1,6 +1,9 @@
 name: 每日自動更新法拍與實價登錄
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # 每天台灣時間早上 08:30 (UTC 00:30) 自動執行
     - cron: '30 0 * * *'
